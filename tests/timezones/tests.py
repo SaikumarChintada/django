@@ -35,7 +35,8 @@ from .models import (
 
 # These tests use the EAT (Eastern Africa Time) and ICT (Indochina Time)
 # who don't have Daylight Saving Time, so we can represent them easily
-# with FixedOffset, and use them directly as tzinfo in the constructors.
+# with fixed offset timezones and use them directly as tzinfo in the
+# constructors.
 
 # settings.TIME_ZONE is forced to EAT. Most tests use a variant of
 # datetime.datetime(2011, 9, 1, 13, 20, 30), which translates to
@@ -580,7 +581,7 @@ class ForcedTimeZoneDatabaseTests(TransactionTestCase):
 
 @skipUnlessDBFeature('supports_timezones')
 @override_settings(TIME_ZONE='Africa/Nairobi', USE_TZ=True)
-class UnsupportedTimeZoneDatabaseTests(TestCase):
+class UnsupportedTimeZoneDatabaseTests(SimpleTestCase):
 
     def test_time_zone_parameter_not_supported_if_database_supports_timezone(self):
         connections.databases['tz'] = connections.databases['default'].copy()
@@ -606,7 +607,7 @@ class SerializationTests(SimpleTestCase):
     # - JSON supports only milliseconds, microseconds will be truncated.
     # - PyYAML dumps the UTC offset correctly for timezone-aware datetimes,
     #   but when it loads this representation, it subtracts the offset and
-    #   returns a naive datetime object in UTC (http://pyyaml.org/ticket/202).
+    #   returns a naive datetime object in UTC. See ticket #18867.
     # Tests are adapted to take these quirks into account.
 
     def assert_python_contains_datetime(self, objects, dt):

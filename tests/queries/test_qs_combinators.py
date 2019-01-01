@@ -130,6 +130,13 @@ class QuerySetSetOperationTests(TestCase):
         ).values_list('num', 'count')
         self.assertCountEqual(qs1.union(qs2), [(1, 0), (2, 1)])
 
+    def test_union_with_extra_and_values_list(self):
+        qs1 = Number.objects.filter(num=1).extra(
+            select={'count': 0},
+        ).values_list('num', 'count')
+        qs2 = Number.objects.filter(num=2).extra(select={'count': 1})
+        self.assertCountEqual(qs1.union(qs2), [(1, 0), (2, 1)])
+
     def test_union_with_values_list_on_annotated_and_unannotated(self):
         ReservedName.objects.create(name='rn1', order=1)
         qs1 = Number.objects.annotate(
@@ -207,3 +214,9 @@ class QuerySetSetOperationTests(TestCase):
             list(qs1.union(qs2).order_by('num'))
         # switched order, now 'exists' again:
         list(qs2.union(qs1).order_by('num'))
+
+    @skipUnlessDBFeature('supports_select_difference', 'supports_select_intersection')
+    def test_qs_with_subcompound_qs(self):
+        qs1 = Number.objects.all()
+        qs2 = Number.objects.intersection(Number.objects.filter(num__gt=1))
+        self.assertEqual(qs1.difference(qs2).count(), 2)

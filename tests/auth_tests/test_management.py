@@ -29,6 +29,8 @@ MOCK_INPUT_KEY_TO_PROMPTS = {
     # @mock_inputs dict key: [expected prompt messages],
     'bypass': ['Bypass password validation and create user anyway? [y/N]: '],
     'email': ['Email address: '],
+    'date_of_birth': ['Date of birth: '],
+    'first_name': ['First name: '],
     'username': ['Username: ', lambda: "Username (leave blank to use '%s'): " % get_default_username()],
 }
 
@@ -130,8 +132,11 @@ class GetDefaultUsernameTestCase(TestCase):
 ])
 class ChangepasswordManagementCommandTestCase(TestCase):
 
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username='joe', password='qwerty')
+
     def setUp(self):
-        self.user = User.objects.create_user(username='joe', password='qwerty')
         self.stdout = StringIO()
         self.stderr = StringIO()
 
@@ -327,6 +332,7 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
             interactive=False,
             email="joe@somewhere.org",
             date_of_birth="1976-04-01",
+            first_name='Joe',
             stdout=new_io,
         )
         command_output = new_io.getvalue().strip()
@@ -521,14 +527,10 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
         Creation should fail if the password fails validation.
         """
         new_io = StringIO()
+        entered_passwords = ['1234567890', '1234567890', 'password', 'password']
 
-        # Returns '1234567890' the first two times it is called, then
-        # 'password' subsequently.
-        def bad_then_good_password(index=[0]):
-            index[0] += 1
-            if index[0] <= 2:
-                return '1234567890'
-            return 'password'
+        def bad_then_good_password():
+            return entered_passwords.pop(0)
 
         @mock_inputs({
             'password': bad_then_good_password,
@@ -547,6 +549,77 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
             self.assertEqual(
                 new_io.getvalue().strip(),
                 "This password is entirely numeric.\n"
+                "Superuser created successfully."
+            )
+
+        test(self)
+
+    @override_settings(AUTH_PASSWORD_VALIDATORS=[
+        {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    ])
+    def test_validate_password_against_username(self):
+        new_io = StringIO()
+        username = 'supremelycomplex'
+        entered_passwords = [username, username, 'superduperunguessablepassword', 'superduperunguessablepassword']
+
+        def bad_then_good_password():
+            return entered_passwords.pop(0)
+
+        @mock_inputs({
+            'password': bad_then_good_password,
+            'username': username,
+            'email': '',
+            'bypass': 'n',
+        })
+        def test(self):
+            call_command(
+                'createsuperuser',
+                interactive=True,
+                stdin=MockTTY(),
+                stdout=new_io,
+                stderr=new_io,
+            )
+            self.assertEqual(
+                new_io.getvalue().strip(),
+                'The password is too similar to the username.\n'
+                'Superuser created successfully.'
+            )
+
+        test(self)
+
+    @override_settings(
+        AUTH_USER_MODEL='auth_tests.CustomUser',
+        AUTH_PASSWORD_VALIDATORS=[
+            {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+        ]
+    )
+    def test_validate_password_against_required_fields(self):
+        new_io = StringIO()
+        first_name = 'josephine'
+        entered_passwords = [first_name, first_name, 'superduperunguessablepassword', 'superduperunguessablepassword']
+
+        def bad_then_good_password():
+            return entered_passwords.pop(0)
+
+        @mock_inputs({
+            'password': bad_then_good_password,
+            'username': 'whatever',
+            'first_name': first_name,
+            'date_of_birth': '1970-01-01',
+            'email': 'joey@example.com',
+            'bypass': 'n',
+        })
+        def test(self):
+            call_command(
+                'createsuperuser',
+                interactive=True,
+                stdin=MockTTY(),
+                stdout=new_io,
+                stderr=new_io,
+            )
+            self.assertEqual(
+                new_io.getvalue().strip(),
+                "The password is too similar to the first name.\n"
                 "Superuser created successfully."
             )
 
@@ -794,6 +867,40 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
                 "Error: Blank passwords aren't allowed.\n"
                 "Superuser created successfully."
             )
+
+        test(self)
+
+    @override_settings(AUTH_USER_MODEL='auth_tests.NoPasswordUser')
+    def test_usermodel_without_password(self):
+        new_io = StringIO()
+
+        def test(self):
+            call_command(
+                'createsuperuser',
+                interactive=False,
+                stdin=MockTTY(),
+                stdout=new_io,
+                stderr=new_io,
+                username='username',
+            )
+            self.assertEqual(new_io.getvalue().strip(), 'Superuser created successfully.')
+
+        test(self)
+
+    @override_settings(AUTH_USER_MODEL='auth_tests.NoPasswordUser')
+    def test_usermodel_without_password_interactive(self):
+        new_io = StringIO()
+
+        @mock_inputs({'username': 'username'})
+        def test(self):
+            call_command(
+                'createsuperuser',
+                interactive=True,
+                stdin=MockTTY(),
+                stdout=new_io,
+                stderr=new_io,
+            )
+            self.assertEqual(new_io.getvalue().strip(), 'Superuser created successfully.')
 
         test(self)
 

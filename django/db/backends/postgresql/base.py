@@ -121,7 +121,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     #
     # Note: we use str.format() here for readability as '%' is used as a wildcard for
     # the LIKE operator.
-    pattern_esc = r"REPLACE(REPLACE(REPLACE({}, '\', '\\'), '%%', '\%%'), '_', '\_')"
+    pattern_esc = r"REPLACE(REPLACE(REPLACE({}, E'\\', E'\\\\'), E'%%', E'\\%%'), E'_', E'\\_')"
     pattern_ops = {
         'contains': "LIKE '%%' || {} || '%%'",
         'icontains': "LIKE '%%' || UPPER({}) || '%%'",
@@ -151,9 +151,13 @@ class DatabaseWrapper(BaseDatabaseWrapper):
                 "Please supply the NAME value.")
         if len(settings_dict['NAME'] or '') > self.ops.max_name_length():
             raise ImproperlyConfigured(
-                'Database names longer than %d characters are not supported by '
-                'PostgreSQL. Supply a shorter NAME in settings.DATABASES.'
-                % self.ops.max_name_length()
+                "The database name '%s' (%d characters) is longer than "
+                "PostgreSQL's limit of %d characters. Supply a shorter NAME "
+                "in settings.DATABASES." % (
+                    settings_dict['NAME'],
+                    len(settings_dict['NAME']),
+                    self.ops.max_name_length(),
+                )
             )
         conn_params = {
             'database': settings_dict['NAME'] or 'postgres',

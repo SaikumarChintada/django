@@ -164,7 +164,7 @@ class HttpRequest:
     def build_absolute_uri(self, location=None):
         """
         Build an absolute URI from the location and the variables available in
-        this request. If no ``location`` is specified, bulid the absolute URI
+        this request. If no ``location`` is specified, build the absolute URI
         using request.get_full_path(). If the location is absolute, convert it
         to an RFC 3987 compliant URI and return it. If location is relative or
         is scheme-relative (i.e., ``//example.com/``), urljoin() it to a base
@@ -346,11 +346,7 @@ class HttpRequest:
             raise UnreadablePostError(*e.args) from e
 
     def __iter__(self):
-        while True:
-            buf = self.readline()
-            if not buf:
-                break
-            yield buf
+        return iter(self.readline, b'')
 
     def xreadlines(self):
         warnings.warn(
@@ -515,7 +511,7 @@ class QueryDict(MultiValueDict):
                 return urlencode({k: v})
         for k, list_ in self.lists():
             output.extend(
-                encode(k.encode(self.encoding), v.encode(self.encoding))
+                encode(k.encode(self.encoding), str(v).encode(self.encoding))
                 for v in list_
             )
         return '&'.join(output)
@@ -542,7 +538,7 @@ def split_domain_port(host):
     """
     Return a (domain, port) tuple from a given host.
 
-    Returned domain is lower-cased. If the host is invalid, the domain will be
+    Returned domain is lowercased. If the host is invalid, the domain will be
     empty.
     """
     host = host.lower()
@@ -570,7 +566,7 @@ def validate_host(host, allowed_hosts):
     ``example.com`` and any subdomain), ``*`` matches anything, and anything
     else must match exactly.
 
-    Note: This function assumes that the given host is lower-cased and has
+    Note: This function assumes that the given host is lowercased and has
     already had the port, if any, stripped off.
 
     Return ``True`` for a valid host, ``False`` otherwise.

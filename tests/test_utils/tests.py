@@ -5,7 +5,6 @@ from io import StringIO
 from unittest import mock
 
 from django.conf import settings
-from django.conf.urls import url
 from django.contrib.staticfiles.finders import get_finder, get_finders
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.core.files.storage import default_storage
@@ -19,10 +18,10 @@ from django.test import (
 )
 from django.test.html import HTMLParseError, parse_html
 from django.test.utils import (
-    CaptureQueriesContext, isolate_apps, override_settings,
-    setup_test_environment,
+    CaptureQueriesContext, TestContextDecorator, isolate_apps,
+    override_settings, setup_test_environment,
 )
-from django.urls import NoReverseMatch, reverse
+from django.urls import NoReverseMatch, path, reverse
 
 from .models import Car, Person, PossessedCar
 from .views import empty_response
@@ -185,9 +184,10 @@ class AssertNumQueriesUponConnectionTests(TransactionTestCase):
 
 
 class AssertQuerysetEqualTests(TestCase):
-    def setUp(self):
-        self.p1 = Person.objects.create(name='p1')
-        self.p2 = Person.objects.create(name='p2')
+    @classmethod
+    def setUpTestData(cls):
+        cls.p1 = Person.objects.create(name='p1')
+        cls.p2 = Person.objects.create(name='p2')
 
     def test_ordered(self):
         self.assertQuerysetEqual(
@@ -255,8 +255,9 @@ class AssertQuerysetEqualTests(TestCase):
 @override_settings(ROOT_URLCONF='test_utils.urls')
 class CaptureQueriesContextManagerTests(TestCase):
 
-    def setUp(self):
-        self.person_pk = str(Person.objects.create(name='test').pk)
+    @classmethod
+    def setUpTestData(cls):
+        cls.person_pk = str(Person.objects.create(name='test').pk)
 
     def test_simple(self):
         with CaptureQueriesContext(connection) as captured_queries:
@@ -960,11 +961,11 @@ class AssertURLEqualTests(SimpleTestCase):
 
 
 class FirstUrls:
-    urlpatterns = [url(r'first/$', empty_response, name='first')]
+    urlpatterns = [path('first/', empty_response, name='first')]
 
 
 class SecondUrls:
-    urlpatterns = [url(r'second/$', empty_response, name='second')]
+    urlpatterns = [path('second/', empty_response, name='second')]
 
 
 class SetupTestEnvironmentTests(SimpleTestCase):
@@ -1092,7 +1093,7 @@ class OverrideSettingsTests(SimpleTestCase):
         Overriding the STATICFILES_STORAGE setting should be reflected in
         the value of django.contrib.staticfiles.storage.staticfiles_storage.
         """
-        new_class = 'CachedStaticFilesStorage'
+        new_class = 'ManifestStaticFilesStorage'
         new_storage = 'django.contrib.staticfiles.storage.' + new_class
         with self.settings(STATICFILES_STORAGE=new_storage):
             self.assertEqual(staticfiles_storage.__class__.__name__, new_class)
@@ -1221,3 +1222,28 @@ class IsolatedAppsTests(SimpleTestCase):
         self.assertEqual(MethodDecoration._meta.apps, method_apps)
         self.assertEqual(ContextManager._meta.apps, context_apps)
         self.assertEqual(NestedContextManager._meta.apps, nested_context_apps)
+
+
+class DoNothingDecorator(TestContextDecorator):
+    def enable(self):
+        pass
+
+    def disable(self):
+        pass
+
+
+class TestContextDecoratorTests(SimpleTestCase):
+
+    @mock.patch.object(DoNothingDecorator, 'disable')
+    def test_exception_in_setup(self, mock_disable):
+        """An exception is setUp() is reraised after disable() is called."""
+        class ExceptionInSetUp(unittest.TestCase):
+            def setUp(self):
+                raise NotImplementedError('reraised')
+
+        decorator = DoNothingDecorator()
+        decorated_test_class = decorator.__call__(ExceptionInSetUp)()
+        self.assertFalse(mock_disable.called)
+        with self.assertRaisesMessage(NotImplementedError, 'reraised'):
+            decorated_test_class.setUp()
+        self.assertTrue(mock_disable.called)

@@ -196,8 +196,8 @@ Default permissions
 -------------------
 
 When ``django.contrib.auth`` is listed in your :setting:`INSTALLED_APPS`
-setting, it will ensure that three default permissions -- add, change and
-delete -- are created for each Django model defined in one of your installed
+setting, it will ensure that four default permissions -- add, change, delete,
+and view -- are created for each Django model defined in one of your installed
 applications.
 
 These permissions will be created when you run :djadmin:`manage.py migrate
@@ -1351,8 +1351,8 @@ implementation details see :ref:`using-the-views`.
 
     **Template context:**
 
-    * ``form``: The form (see ``set_password_form`` above) for setting the
-      new user's password.
+    * ``form``: The form (see ``form_class`` above) for setting the new user's
+      password.
 
     * ``validlink``: Boolean, True if the link (combination of ``uidb64`` and
       ``token``) is valid or unused yet.
@@ -1447,7 +1447,7 @@ provides several built-in forms located in :mod:`django.contrib.auth.forms`:
                     pass
 
         (In this case, you'll also need to use an authentication backend that
-        allows inactive users, such as as
+        allows inactive users, such as
         :class:`~django.contrib.auth.backends.AllowAllUsersModelBackend`.)
 
         Or to allow only some active users to log in::

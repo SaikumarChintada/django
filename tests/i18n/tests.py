@@ -208,6 +208,39 @@ class TranslationTests(SimpleTestCase):
             with self.assertRaisesMessage(KeyError, 'Your dictionary lacks key'):
                 complex_context_deferred % {'name': 'Jim'}
 
+    @override_settings(LOCALE_PATHS=extended_locale_paths)
+    def test_ngettext_lazy_format_style(self):
+        simple_with_format = ngettext_lazy('{} good result', '{} good results')
+        simple_context_with_format = npgettext_lazy('Exclamation', '{} good result', '{} good results')
+
+        with translation.override('de'):
+            self.assertEqual(simple_with_format.format(1), '1 gutes Resultat')
+            self.assertEqual(simple_with_format.format(4), '4 guten Resultate')
+            self.assertEqual(simple_context_with_format.format(1), '1 gutes Resultat!')
+            self.assertEqual(simple_context_with_format.format(4), '4 guten Resultate!')
+
+        complex_nonlazy = ngettext_lazy('Hi {name}, {num} good result', 'Hi {name}, {num} good results', 4)
+        complex_deferred = ngettext_lazy(
+            'Hi {name}, {num} good result', 'Hi {name}, {num} good results', 'num'
+        )
+        complex_context_nonlazy = npgettext_lazy(
+            'Greeting', 'Hi {name}, {num} good result', 'Hi {name}, {num} good results', 4
+        )
+        complex_context_deferred = npgettext_lazy(
+            'Greeting', 'Hi {name}, {num} good result', 'Hi {name}, {num} good results', 'num'
+        )
+        with translation.override('de'):
+            self.assertEqual(complex_nonlazy.format(num=4, name='Jim'), 'Hallo Jim, 4 guten Resultate')
+            self.assertEqual(complex_deferred.format(name='Jim', num=1), 'Hallo Jim, 1 gutes Resultat')
+            self.assertEqual(complex_deferred.format(name='Jim', num=5), 'Hallo Jim, 5 guten Resultate')
+            with self.assertRaisesMessage(KeyError, 'Your dictionary lacks key'):
+                complex_deferred.format(name='Jim')
+            self.assertEqual(complex_context_nonlazy.format(num=4, name='Jim'), 'Willkommen Jim, 4 guten Resultate')
+            self.assertEqual(complex_context_deferred.format(name='Jim', num=1), 'Willkommen Jim, 1 gutes Resultat')
+            self.assertEqual(complex_context_deferred.format(name='Jim', num=5), 'Willkommen Jim, 5 guten Resultate')
+            with self.assertRaisesMessage(KeyError, 'Your dictionary lacks key'):
+                complex_context_deferred.format(name='Jim')
+
     def test_ngettext_lazy_bool(self):
         self.assertTrue(ngettext_lazy('%d good result', '%d good results'))
         self.assertFalse(ngettext_lazy('', ''))
@@ -949,8 +982,15 @@ class FormattingTests(SimpleTestCase):
                 )
 
     def test_localized_input_func(self):
+        tests = (
+            (True, 'True'),
+            (datetime.date(1, 1, 1), '0001-01-01'),
+            (datetime.datetime(1, 1, 1), '0001-01-01 00:00:00'),
+        )
         with self.settings(USE_THOUSAND_SEPARATOR=True):
-            self.assertEqual(localize_input(True), 'True')
+            for value, expected in tests:
+                with self.subTest(value=value):
+                    self.assertEqual(localize_input(value), expected)
 
     def test_sanitize_separators(self):
         """
@@ -1039,33 +1079,35 @@ class FormattingTests(SimpleTestCase):
         """
         Test the {% localize %} templatetag and the localize/unlocalize filters.
         """
-        context = Context({'float': 3.14, 'date': datetime.date(2016, 12, 31)})
+        context = Context({'int': 1455, 'float': 3.14, 'date': datetime.date(2016, 12, 31)})
         template1 = Template(
-            '{% load l10n %}{% localize %}{{ float }}/{{ date }}{% endlocalize %}; '
-            '{% localize on %}{{ float }}/{{ date }}{% endlocalize %}'
+            '{% load l10n %}{% localize %}{{ int }}/{{ float }}/{{ date }}{% endlocalize %}; '
+            '{% localize on %}{{ int }}/{{ float }}/{{ date }}{% endlocalize %}'
         )
         template2 = Template(
-            '{% load l10n %}{{ float }}/{{ date }}; '
-            '{% localize off %}{{ float }}/{{ date }};{% endlocalize %} '
-            '{{ float }}/{{ date }}'
+            '{% load l10n %}{{ int }}/{{ float }}/{{ date }}; '
+            '{% localize off %}{{ int }}/{{ float }}/{{ date }};{% endlocalize %} '
+            '{{ int }}/{{ float }}/{{ date }}'
         )
         template3 = Template(
-            '{% load l10n %}{{ float }}/{{ date }}; {{ float|unlocalize }}/{{ date|unlocalize }}'
+            '{% load l10n %}{{ int }}/{{ float }}/{{ date }}; '
+            '{{ int|unlocalize }}/{{ float|unlocalize }}/{{ date|unlocalize }}'
         )
         template4 = Template(
-            '{% load l10n %}{{ float }}/{{ date }}; {{ float|localize }}/{{ date|localize }}'
+            '{% load l10n %}{{ int }}/{{ float }}/{{ date }}; '
+            '{{ int|localize }}/{{ float|localize }}/{{ date|localize }}'
         )
-        expected_localized = '3,14/31. Dezember 2016'
-        expected_unlocalized = '3.14/Dez. 31, 2016'
+        expected_localized = '1.455/3,14/31. Dezember 2016'
+        expected_unlocalized = '1455/3.14/Dez. 31, 2016'
         output1 = '; '.join([expected_localized, expected_localized])
         output2 = '; '.join([expected_localized, expected_unlocalized, expected_localized])
         output3 = '; '.join([expected_localized, expected_unlocalized])
         output4 = '; '.join([expected_unlocalized, expected_localized])
         with translation.override('de', deactivate=True):
-            with self.settings(USE_L10N=False):
+            with self.settings(USE_L10N=False, USE_THOUSAND_SEPARATOR=True):
                 self.assertEqual(template1.render(context), output1)
                 self.assertEqual(template4.render(context), output4)
-            with self.settings(USE_L10N=True):
+            with self.settings(USE_L10N=True, USE_THOUSAND_SEPARATOR=True):
                 self.assertEqual(template1.render(context), output1)
                 self.assertEqual(template2.render(context), output2)
                 self.assertEqual(template3.render(context), output3)
@@ -1133,10 +1175,7 @@ class FormattingTests(SimpleTestCase):
 
 
 class MiscTests(SimpleTestCase):
-
-    def setUp(self):
-        super().setUp()
-        self.rf = RequestFactory()
+    rf = RequestFactory()
 
     @override_settings(LANGUAGE_CODE='de')
     def test_english_fallback(self):
@@ -1631,15 +1670,13 @@ class UnprefixedDefaultLanguageTests(SimpleTestCase):
     ROOT_URLCONF='i18n.urls'
 )
 class CountrySpecificLanguageTests(SimpleTestCase):
-
-    def setUp(self):
-        super().setUp()
-        self.rf = RequestFactory()
+    rf = RequestFactory()
 
     def test_check_for_language(self):
         self.assertTrue(check_for_language('en'))
         self.assertTrue(check_for_language('en-us'))
         self.assertTrue(check_for_language('en-US'))
+        self.assertFalse(check_for_language('en_US'))
         self.assertTrue(check_for_language('be'))
         self.assertTrue(check_for_language('be@latin'))
         self.assertTrue(check_for_language('sr-RS@latin'))

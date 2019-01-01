@@ -80,7 +80,7 @@ class Command(BaseCommand):
         ignore_patterns = options['ignore_patterns']
         if options['use_default_ignore_patterns']:
             ignore_patterns += apps.get_app_config('staticfiles').ignore_patterns
-        self.ignore_patterns = list(set(ignore_patterns))
+        self.ignore_patterns = list(set(os.path.normpath(p) for p in ignore_patterns))
         self.post_process = options['post_process']
 
     def collect(self):
@@ -271,7 +271,6 @@ class Command(BaseCommand):
                         # unmodified files.
                         can_skip_unmodified_files = not (self.symlink ^ os.path.islink(full_path))
                     else:
-                        full_path = None
                         # In remote storages, skipping is only based on the
                         # modified times since symlinks aren't relevant.
                         can_skip_unmodified_files = True

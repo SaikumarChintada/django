@@ -120,7 +120,7 @@ def setup_test_environment(debug=None):
 
     saved_data.allowed_hosts = settings.ALLOWED_HOSTS
     # Add the default host of the test client.
-    settings.ALLOWED_HOSTS = list(settings.ALLOWED_HOSTS) + ['testserver']
+    settings.ALLOWED_HOSTS = [*settings.ALLOWED_HOSTS, 'testserver']
 
     saved_data.debug = settings.DEBUG
     settings.DEBUG = debug
@@ -347,7 +347,11 @@ class TestContextDecorator:
                 context = self.enable()
                 if self.attr_name:
                     setattr(inner_self, self.attr_name, context)
-                decorated_setUp(inner_self)
+                try:
+                    decorated_setUp(inner_self)
+                except Exception:
+                    self.disable()
+                    raise
 
             def tearDown(inner_self):
                 decorated_tearDown(inner_self)
@@ -382,6 +386,8 @@ class override_settings(TestContextDecorator):
     with the ``with`` statement. In either event, entering/exiting are called
     before and after, respectively, the function/block is executed.
     """
+    enable_exception = None
+
     def __init__(self, **kwargs):
         self.options = kwargs
         super().__init__()
@@ -401,18 +407,35 @@ class override_settings(TestContextDecorator):
         self.wrapped = settings._wrapped
         settings._wrapped = override
         for key, new_value in self.options.items():
-            setting_changed.send(sender=settings._wrapped.__class__,
-                                 setting=key, value=new_value, enter=True)
+            try:
+                setting_changed.send(
+                    sender=settings._wrapped.__class__,
+                    setting=key, value=new_value, enter=True,
+                )
+            except Exception as exc:
+                self.enable_exception = exc
+                self.disable()
 
     def disable(self):
         if 'INSTALLED_APPS' in self.options:
             apps.unset_installed_apps()
         settings._wrapped = self.wrapped
         del self.wrapped
+        responses = []
         for key in self.options:
             new_value = getattr(settings, key, None)
-            setting_changed.send(sender=settings._wrapped.__class__,
-                                 setting=key, value=new_value, enter=False)
+            responses_for_setting = setting_changed.send_robust(
+                sender=settings._wrapped.__class__,
+                setting=key, value=new_value, enter=False,
+            )
+            responses.extend(responses_for_setting)
+        if self.enable_exception is not None:
+            exc = self.enable_exception
+            self.enable_exception = None
+            raise exc
+        for _, response in responses:
+            if isinstance(response, Exception):
+                raise response
 
     def save_options(self, test_func):
         if test_func._overridden_settings is None:
@@ -640,7 +663,7 @@ def patch_logger(logger_name, log_level, log_kwargs=False):
     Context manager that takes a named logger and the logging level
     and provides a simple mock-like list of messages received.
 
-    Use unitttest.assertLogs() if you only need Python 3 support. This
+    Use unittest.assertLogs() if you only need Python 3 support. This
     private API will be removed after Python 2 EOL in 2020 (#27753).
     """
     calls = []
@@ -840,3 +863,18 @@ def tag(*tags):
             setattr(obj, 'tags', set(tags))
         return obj
     return decorator
+
+
+@contextmanager
+def register_lookup(field, *lookups, lookup_name=None):
+    """
+    Context manager to temporarily register lookups on a model field using
+    lookup_name (or the lookup's lookup_name if not provided).
+    """
+    try:
+        for lookup in lookups:
+            field.register_lookup(lookup, lookup_name)
+        yield
+    finally:
+        for lookup in lookups:
+            field._unregister_lookup(lookup, lookup_name)

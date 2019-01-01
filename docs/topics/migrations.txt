@@ -67,9 +67,10 @@ PostgreSQL
 ----------
 
 PostgreSQL is the most capable of all the databases here in terms of schema
-support; the only caveat is that adding columns with default values will
-cause a full rewrite of the table, for a time proportional to its size.
+support.
 
+The only caveat is that prior to PostgreSQL 11, adding columns with default
+values causes a full rewrite of the table, for a time proportional to its size.
 For this reason, it's recommended you always create new columns with
 ``null=True``, as this way they will be added immediately.
 
@@ -134,8 +135,8 @@ database to make sure they work as expected::
     Operations to perform:
       Apply all migrations: books
     Running migrations:
-      Rendering model states... DONE
-      Applying books.0003_auto... OK
+      Rendering model states… DONE
+      Applying books.0003_auto… OK
 
 Once the migration is applied, commit the migration and the models change
 to your version control system as a single commit - that way, when other
@@ -627,9 +628,10 @@ or with a ``CircularDependencyError``, in which case you can manually resolve it
 To manually resolve a ``CircularDependencyError``, break out one of
 the ForeignKeys in the circular dependency loop into a separate
 migration, and move the dependency on the other app with it. If you're unsure,
-see how makemigrations deals with the problem when asked to create brand
-new migrations from your models. In a future release of Django, squashmigrations
-will be updated to attempt to resolve these errors itself.
+see how :djadmin:`makemigrations` deals with the problem when asked to create
+brand new migrations from your models. In a future release of Django,
+:djadmin:`squashmigrations` will be updated to attempt to resolve these errors
+itself.
 
 Once you've squashed your migration, you should then commit it alongside the
 migrations it replaces and distribute this change to all running instances
@@ -665,7 +667,7 @@ for basic values, and doesn't specify import paths).
 
 Django can serialize the following:
 
-- ``int``, ``float``, ``bool``, ``str``, ``bytes``, ``None``
+- ``int``, ``float``, ``bool``, ``str``, ``bytes``, ``None``, ``NoneType``
 - ``list``, ``set``, ``tuple``, ``dict``
 - ``datetime.date``, ``datetime.time``, and ``datetime.datetime`` instances
   (include those that are timezone-aware)
@@ -684,6 +686,10 @@ Django can serialize the following:
 .. versionchanged:: 2.1
 
     Serialization support for :class:`functools.partialmethod` was added.
+
+.. versionchanged:: 2.2
+
+    Serialization support for ``NoneType`` was added.
 
 Django cannot serialize:
 

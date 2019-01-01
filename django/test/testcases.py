@@ -614,8 +614,7 @@ class SimpleTestCase(unittest.TestCase):
     def _assertFooMessage(self, func, cm_attr, expected_exception, expected_message, *args, **kwargs):
         callable_obj = None
         if args:
-            callable_obj = args[0]
-            args = args[1:]
+            callable_obj, *args = args
         cm = self._assert_raises_or_warns_cm(func, cm_attr, expected_exception, expected_message)
         # Assertion used in context manager fashion.
         if callable_obj is None:
@@ -626,7 +625,7 @@ class SimpleTestCase(unittest.TestCase):
 
     def assertRaisesMessage(self, expected_exception, expected_message, *args, **kwargs):
         """
-        Assert that expected_message is found in the the message of a raised
+        Assert that expected_message is found in the message of a raised
         exception.
 
         Args:
@@ -898,8 +897,7 @@ class TransactionTestCase(SimpleTestCase):
             if self.reset_sequences:
                 self._reset_sequences(db_name)
 
-            # If we need to provide replica initial data from migrated apps,
-            # then do so.
+            # Provide replica initial data from migrated apps, if needed.
             if self.serialized_rollback and hasattr(connections[db_name], "_test_serialized_contents"):
                 if self.available_apps is not None:
                     apps.unset_available_apps()
@@ -1304,6 +1302,10 @@ class LiveServerTestCase(TransactionTestCase):
     def live_server_url(cls):
         return 'http://%s:%s' % (cls.host, cls.server_thread.port)
 
+    @classproperty
+    def allowed_host(cls):
+        return cls.host
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -1317,7 +1319,7 @@ class LiveServerTestCase(TransactionTestCase):
                 connections_override[conn.alias] = conn
 
         cls._live_server_modified_settings = modify_settings(
-            ALLOWED_HOSTS={'append': cls.host},
+            ALLOWED_HOSTS={'append': cls.allowed_host},
         )
         cls._live_server_modified_settings.enable()
         cls.server_thread = cls._create_server_thread(connections_override)

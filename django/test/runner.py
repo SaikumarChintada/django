@@ -602,16 +602,28 @@ class DiscoverRunner:
         self.setup_test_environment()
         suite = self.build_suite(test_labels, extra_tests)
         old_config = self.setup_databases()
-        self.run_checks()
-        result = self.run_suite(suite)
-        self.teardown_databases(old_config)
-        self.teardown_test_environment()
+        run_failed = False
+        try:
+            self.run_checks()
+            result = self.run_suite(suite)
+        except Exception:
+            run_failed = True
+            raise
+        finally:
+            try:
+                self.teardown_databases(old_config)
+                self.teardown_test_environment()
+            except Exception:
+                # Silence teardown exceptions if an exception was raised during
+                # runs to avoid shadowing it.
+                if not run_failed:
+                    raise
         return self.suite_result(suite, result)
 
 
 def is_discoverable(label):
     """
-    Check if a test label points to a python package or file directory.
+    Check if a test label points to a Python package or file directory.
 
     Relative labels like "." and ".." are seen as directories.
     """

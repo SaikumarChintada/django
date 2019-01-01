@@ -32,7 +32,7 @@ def paginator_number(cl, i):
     Generate an individual page index link in a paginated list.
     """
     if i == DOT:
-        return '... '
+        return '… '
     elif i == cl.page_num:
         return format_html('<span class="this-page">{}</span> ', i + 1)
     else:
@@ -418,6 +418,7 @@ def date_hierarchy(cl):
             years = getattr(cl.queryset, 'dates')(field_name, 'year')
             return {
                 'show': True,
+                'back': None,
                 'choices': [{
                     'link': link({year_field: str(year.year)}),
                     'title': str(year.year),
